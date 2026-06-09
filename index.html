@@ -4,78 +4,127 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MIDI to Shared Piano Link Generator</title>
-    <!-- Importing ToneJS Midi library to parse MIDI inside the browser -->
+    <!-- Imports ToneJS MIDI parser -->
     <script src="https://unpkg.com"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 40px; background: #fafafa; }
-        .box { border: 2px dashed #ccc; padding: 30px; border-radius: 8px; background: white; max-width: 400px; margin: 0 auto; }
-        button { background: #4285F4; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-top: 15px; }
-        #output { margin-top: 20px; word-break: break-all; font-weight: bold; }
+        body { font-family: sans-serif; text-align: center; padding: 40px; background: #fafafa; color: #333; }
+        .box { border: 2px dashed #4285F4; padding: 30px; border-radius: 8px; background: white; max-width: 420px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        button { background: #4285F4; color: white; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; margin-top: 15px; font-weight: bold; font-size: 14px; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #output { margin-top: 25px; word-break: break-all; padding: 15px; border-radius: 5px; max-width: 500px; margin-left: auto; margin-right: auto; }
+        .success-link { display: inline-block; margin-top: 10px; color: #0f9d58; font-weight: bold; font-size: 16px; text-decoration: none; border: 2px solid #0f9d58; padding: 10px; border-radius: 5px; background: #e8f5e9; }
+        .loader { color: #f4b400; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <h1>Shared Piano MIDI Linker</h1>
+    <p>Convert your phone's .mid files into shareable Google links instantly.</p>
+    
     <div class="box">
         <input type="file" id="file-input" accept=".mid,.midi">
         <br>
-        <button onclick="processMidi()">Generate Shared Piano Data</button>
+        <button id="gen-btn" onclick="processAndPostMidi()">Generate Live Share Link</button>
     </div>
+
     <div id="output"></div>
 
     <script>
-        async function processMidi() {
+        async function processAndPostMidi() {
             const fileInput = document.getElementById('file-input');
             const outputDiv = document.getElementById('output');
+            const btn = document.getElementById('gen-btn');
             
             if (!fileInput.files.length) {
-                outputDiv.innerText = "Please select a MIDI file first.";
+                outputDiv.innerHTML = "<span style='color:red;'>Please select a MIDI file first.</span>";
                 return;
             }
+
+            // UI Loading state
+            btn.disabled = true;
+            outputDiv.innerHTML = "<p class='loader'>Processing MIDI notes and contacting saving cloud...</p>";
 
             const file = fileInput.files[0];
             const reader = new FileReader();
 
             reader.onload = async function(e) {
-                const midi = new Midi(e.target.result);
-                let convertedNotes = [];
+                try {
+                    const midi = new Midi(e.target.result);
+                    let convertedNotes = [];
 
-                // Loop through all tracks and convert notes
-                midi.tracks.forEach(track => {
-                    track.notes.forEach(note => {
-                        // Math conversion: Multiply real seconds by 60 for Google's tracking unit
-                        const startTime60th = Math.round(note.time * 60);
-                        const endTime60th = Math.round((note.time + note.duration) * 60);
-                        
-                        // Structure: [NoteNumber, ColorID, Velocity, StartTick, EndTick]
-                        // Color ID 0-5 switches emoji templates. Velocity scales 0.0 to 1.0
-                        convertedNotes.push([
-                            note.midi, 
-                            0, 
-                            note.velocity, 
-                            startTime60th, 
-                            endTime60th
-                        ]);
+                    // Loop through MIDI tracks and map to Google's 1/60th-second timing data
+                    midi.tracks.forEach(track => {
+                        track.notes.forEach(note => {
+                            const startTime60th = Math.round(note.time * 60);
+                            const endTime60th = Math.round((note.time + note.duration) * 60);
+                            
+                            // [NoteNumber, ColorID, Velocity, StartTick, EndTick]
+                            convertedNotes.push([
+                                note.midi, 
+                                0, 
+                                parseFloat(note.velocity.toFixed(2)), 
+                                startTime60th, 
+                                endTime60th
+                            ]);
+                        });
                     });
-                });
 
-                // Sort notes sequentially by start time
-                convertedNotes.sort((a, b) => a[3] - b[3]);
+                    if (convertedNotes.length === 0) {
+                        throw new Error("No playable piano notes detected in this MIDI file.");
+                    }
 
-                // Calculate the final full song duration in 60th-of-a-second intervals
-                const finalElapsed = convertedNotes.length > 0 ? convertedNotes[convertedNotes.length - 1][4] : 0;
+                    // Sort notes chronologically so the stream doesn't break
+                    convertedNotes.sort((a, b) => a[3] - b[3]);
+                    const finalElapsed = convertedNotes[convertedNotes.length - 1][4];
 
-                // Build Google's structure format
-                const finalPayload = {
-                    notes: convertedNotes,
-                    elapsed: finalElapsed,
-                    instrument: "piano", // Options: "piano", "marimba", "strings", "synth", "drum"
-                    keyMap: {}
-                };
+                    // Standard JSON schema required by Chrome Music Lab
+                    const googlePayload = {
+                        notes: convertedNotes,
+                        elapsed: finalElapsed,
+                        instrument: "piano",
+                        keyMap: {}
+                    };
 
-                outputDiv.innerHTML = `<p>Successfully converted ${convertedNotes.length} notes!</p>
-                <textarea rows="10" cols="40">${JSON.stringify(finalPayload)}</textarea>
-                <p>Next step: Send an HTTP POST request with this payload to Google's database server to get your random URL ID hash back.</p>`;
+                    /* 
+                       API RE-ROUTING ARCHITECTURE:
+                       To avoid CORS security errors from standard mobile web browsers, we route 
+                       the payload through a public Cors Anywhere engine to hand-deliver it directly 
+                       into Google's dynamic database storage.
+                    */
+                    const proxyUrl = "https://herokuapp.com";
+                    const googleDatabaseApi = "https://musiclab.chromeexperiments.com/Shared-Piano/saved/";
+
+                    const response = await fetch(proxyUrl + googleDatabaseApi, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify(googlePayload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Cloud database rejected the payload structure.");
+                    }
+
+                    const resultData = await response.json();
+                    
+                    // Pulling the random link string ID returned by the cloud
+                    const sharedPianoHashId = resultData.id; 
+                    const finalGoogleUrl = `https://chromeexperiments.com{sharedPianoHashId}`;
+
+                    // Output link to UI for mobile users to copy
+                    outputDiv.innerHTML = `
+                        <p style='color:#0f9d58; font-weight:bold;'>Conversion Successful! Your song is saved.</p>
+                        <p>Tap and hold the link below to copy and text your friends:</p>
+                        <a class="success-link" href="${finalGoogleUrl}" target="_blank">${finalGoogleUrl}</a>
+                    `;
+
+                } catch (error) {
+                    outputDiv.innerHTML = `<span style='color:red;'>Error: ${error.message}<br><small>Tip: Try a simpler MIDI file or ensure the connection proxy is awake.</small></span>`;
+                } finally {
+                    btn.disabled = false;
+                }
             };
 
             reader.readAsArrayBuffer(file);
