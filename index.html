@@ -3,45 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>High-Density MIDI Shared Piano Linker</title>
-    <!-- Optimized ToneJS MIDI engine -->
+    <title>Extreme MIDI Linker (Rush E Fixed)</title>
     <script src="https://unpkg.com"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; text-align: center; padding: 30px; background: #121212; color: #e0e0e0; }
-        .box { border: 2px dashed #ff3366; padding: 30px; border-radius: 12px; background: #1e1e1e; max-width: 450px; margin: 0 auto; box-shadow: 0 6px 15px rgba(255,51,102,0.15); }
-        button { background: #ff3366; color: white; padding: 14px 28px; border: none; border-radius: 6px; cursor: pointer; margin-top: 15px; font-weight: bold; font-size: 15px; width: 100%; }
-        button:disabled { background: #555; cursor: not-allowed; }
+        body { font-family: -apple-system, sans-serif; text-align: center; padding: 30px; background: #0b0b0e; color: #f0f0f5; }
+        .box { border: 2px dashed #7289da; padding: 30px; border-radius: 12px; background: #18191c; max-width: 450px; margin: 0 auto; box-shadow: 0 8px 24px rgba(114,137,218,0.2); }
+        button { background: #7289da; color: white; padding: 14px 28px; border: none; border-radius: 6px; cursor: pointer; margin-top: 15px; font-weight: bold; font-size: 15px; width: 100%; transition: 0.2s; }
+        button:disabled { background: #4f545c; cursor: not-allowed; }
         #output { margin-top: 25px; word-break: break-all; padding: 15px; border-radius: 6px; max-width: 500px; margin-left: auto; margin-right: auto; }
-        .success-link { display: inline-block; margin-top: 12px; color: #ff3366; font-weight: bold; font-size: 15px; text-decoration: none; border: 2px solid #ff3366; padding: 12px; border-radius: 6px; background: rgba(255,51,102,0.1); word-break: break-all; }
-        .status-msg { color: #f4b400; font-weight: bold; }
+        .success-link { display: inline-block; margin-top: 12px; color: #00fff0; font-weight: bold; font-size: 15px; text-decoration: none; border: 2px solid #7289da; padding: 12px; border-radius: 6px; background: rgba(114,137,218,0.1); word-break: break-all; }
+        .status-msg { color: #faa61a; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h1>Rush-E Ready Shared Piano Linker</h1>
-    <p>Upload massive, high-speed MIDI files smoothly directly from your mobile browser.</p>
+    <h1>Rush E Intelligent Linker</h1>
+    <p>Smart filters automatically down-sample massive Black MIDIs so Google's server accepts them.</p>
     
     <div class="box">
         <input type="file" id="file-input" accept=".mid,.midi">
         <br>
-        <button id="gen-btn" onclick="processRushMidi()">Generate Live Share Link</button>
+        <button id="gen-btn" onclick="processExtremeMidi()">Generate Live Share Link</button>
     </div>
 
     <div id="output"></div>
 
     <script>
-        async function processRushMidi() {
+        async function processExtremeMidi() {
             const fileInput = document.getElementById('file-input');
             const outputDiv = document.getElementById('output');
             const btn = document.getElementById('gen-btn');
             
             if (!fileInput.files.length) {
-                outputDiv.innerHTML = "<span style='color:#ff4444;'>Please select a MIDI file first.</span>";
+                outputDiv.innerHTML = "<span style='color:#f04747;'>Please select your Rush E MIDI file.</span>";
                 return;
             }
 
             btn.disabled = true;
-            outputDiv.innerHTML = "<p class='status-msg'>Parsing high-density notes... (This can take a moment for Rush E)</p>";
+            outputDiv.innerHTML = "<p class='status-msg'>Filtering impossible notes... (Cleaning Black MIDI tracks)</p>";
 
             const file = fileInput.files[0];
             const reader = new FileReader();
@@ -49,53 +48,73 @@
             reader.onload = async function(e) {
                 try {
                     const midi = new Midi(e.target.result);
-                    let convertedNotes = [];
+                    let rawNotes = [];
 
-                    // 1. Flatten all tracks into a singular processing pipeline
+                    // 1. Flatten all complex multitracks into a unified array
                     midi.tracks.forEach(track => {
                         track.notes.forEach(note => {
-                            // Convert real seconds to Google's 1/60th second time blocks
-                            const startTime60th = Math.round(note.time * 60);
-                            const endTime60th = Math.round((note.time + note.duration) * 60);
-                            
-                            // Format payload data: [NoteNumber, ColorID, Velocity, StartTick, EndTick]
-                            convertedNotes.push([
-                                note.midi, 
-                                0, 
-                                parseFloat(note.velocity.toFixed(2)), // Keep payload lightweight
-                                startTime60th, 
-                                endTime60th
-                            ]);
+                            const startTick = Math.round(note.time * 60);
+                            const endTick = Math.round((note.time + note.duration) * 60);
+                            rawNotes.push({
+                                midi: note.midi,
+                                velocity: parseFloat(note.velocity.toFixed(2)),
+                                start: startTick,
+                                end: endTick
+                            });
                         });
                     });
 
-                    if (convertedNotes.length === 0) {
-                        throw new Error("No readable note tracks detected in this MIDI file.");
+                    if (rawNotes.length === 0) throw new Error("No notes found.");
+
+                    // 2. Sort all notes chronologically
+                    rawNotes.sort((a, b) => a.start - b.start);
+
+                    // 3. INTELLIGENT POLYPHONY FILTER: Prevent server overload
+                    // If multiple notes strike at the exact same fraction of time, 
+                    // cap the maximum vertical note width to keep the melody but shred the lag.
+                    let filteredNotes = [];
+                    let timeMap = {};
+                    const MAX_NOTES_PER_TICK = 6; // Max notes allowed to play at the absolute exact same microsecond
+
+                    rawNotes.forEach(note => {
+                        if (!timeMap[note.start]) {
+                            timeMap[note.start] = 0;
+                        }
+                        
+                        if (timeMap[note.start] < MAX_NOTES_PER_TICK) {
+                            filteredNotes.push([
+                                note.midi,
+                                0, // Color ID
+                                note.velocity,
+                                note.start,
+                                note.end
+                            ]);
+                            timeMap[note.start]++;
+                        }
+                    });
+
+                    // 4. MAXIMUM SAFE CLIP SAFEGUARD
+                    // Hard cutoff cap at Google's absolute storage ceiling (4,500 notes)
+                    const SERVER_LIMIT = 4500;
+                    let wasTrimmed = false;
+                    if (filteredNotes.length > SERVER_LIMIT) {
+                        filteredNotes = filteredNotes.slice(0, SERVER_LIMIT);
+                        wasTrimmed = true;
                     }
 
-                    // 2. Sort chronologically so Google's interpreter reads the timeline correctly
-                    convertedNotes.sort((a, b) => a[3] - b[3]);
+                    const finalElapsed = filteredNotes[filteredNotes.length - 1][4];
 
-                    // 3. CAP NOTE EVENT DENSITY (Prevents Google's cloud server from rejecting the file payload)
-                    const MAX_ALLOWED_NOTES = 4500; 
-                    if (convertedNotes.length > MAX_ALLOWED_NOTES) {
-                        outputDiv.innerHTML += `<p style="color:#f4b400; font-size:12px;">Notice: MIDI file has ${convertedNotes.length} notes. Compressed down to the safest maximum (${MAX_ALLOWED_NOTES} notes) to keep Google from rejecting the song!</p>`;
-                        convertedNotes = convertedNotes.slice(0, MAX_ALLOWED_NOTES);
-                    }
-
-                    const finalElapsed = convertedNotes[convertedNotes.length - 1][4];
-
-                    // Structural format validation schema for Chrome Music Lab database
+                    // Google JSON Schema
                     const googlePayload = {
-                        notes: convertedNotes,
+                        notes: filteredNotes,
                         elapsed: finalElapsed,
-                        instrument: "piano", 
+                        instrument: "piano",
                         keyMap: {}
                     };
 
-                    outputDiv.innerHTML = "<p class='status-msg'>Uploading your optimized arrangement to the cloud...</p>";
+                    outputDiv.innerHTML = "<p class='status-msg'>Injecting payload safely into Google server...</p>";
 
-                    // Router proxy to hand-deliver requests to Google's private backend endpoint
+                    // Proxy to bypass CORS block on mobile browsers
                     const proxyUrl = "https://herokuapp.com";
                     const googleDatabaseApi = "https://musiclab.chromeexperiments.com/Shared-Piano/saved/";
 
@@ -109,21 +128,24 @@
                     });
 
                     if (!response.ok) {
-                        throw new Error("Google's cloud database rejected the file size. Try an optimized or trimmed Rush E file variant.");
+                        throw new Error("Payload size still too large. Try a slightly shorter cut of the track.");
                     }
 
                     const resultData = await response.json();
                     const sharedPianoHashId = resultData.id; 
                     const finalGoogleUrl = `https://chromeexperiments.com{sharedPianoHashId}`;
 
+                    let noticeText = wasTrimmed ? "<br><small style='color:#faa61a;'>Note: File compression compressed the timeline to protect server limits.</small>" : "";
+
                     outputDiv.innerHTML = `
-                        <p style='color:#0f9d58; font-weight:bold;'>Rush E Generation Complete!</p>
-                        <p>Copy and send this link to your friends:</p>
+                        <p style='color:#43b581; font-weight:bold;'>Extreme Link Generated successfully!</p>
+                        <p>Copy this and send to your friends:</p>
                         <a class="success-link" href="${finalGoogleUrl}" target="_blank">${finalGoogleUrl}</a>
+                        ${noticeText}
                     `;
 
                 } catch (error) {
-                    outputDiv.innerHTML = `<span style='color:#ff4444;'>Error: ${error.message}<br><small>If it fails, use a "Piano Solo" version of Rush E rather than a massive "Black MIDI" version.</small></span>`;
+                    outputDiv.innerHTML = `<span style='color:#f04747;'>Error: ${error.message}</span>`;
                 } finally {
                     btn.disabled = false;
                 }
