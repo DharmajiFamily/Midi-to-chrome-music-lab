@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Extreme MIDI Linker (Rush E Fixed)</title>
+    
+    <!-- FIX: Using the direct browser distribution file to guarantee Midi is defined globally -->
     <script src="https://unpkg.com"></script>
+    
     <style>
         body { font-family: -apple-system, sans-serif; text-align: center; padding: 30px; background: #0b0b0e; color: #f0f0f5; }
         .box { border: 2px dashed #7289da; padding: 30px; border-radius: 12px; background: #18191c; max-width: 450px; margin: 0 auto; box-shadow: 0 8px 24px rgba(114,137,218,0.2); }
@@ -39,6 +42,13 @@
                 return;
             }
 
+            // FIX: Explicitly check if the imported library has attached itself to the window scope yet
+            const MidiConstructor = window.Midi || (typeof Midi !== 'undefined' ? Midi : null);
+            if (!MidiConstructor) {
+                outputDiv.innerHTML = "<span style='color:#faa61a;'>Library is still loading from the cloud. Please wait 3 seconds and tap again.</span>";
+                return;
+            }
+
             btn.disabled = true;
             outputDiv.innerHTML = "<p class='status-msg'>Filtering impossible notes... (Cleaning Black MIDI tracks)</p>";
 
@@ -47,7 +57,8 @@
 
             reader.onload = async function(e) {
                 try {
-                    const midi = new Midi(e.target.result);
+                    // FIX: Instantiating safely via the validated constructor
+                    const midi = new MidiConstructor(e.target.result);
                     let rawNotes = [];
 
                     // 1. Flatten all complex multitracks into a unified array
@@ -64,17 +75,15 @@
                         });
                     });
 
-                    if (rawNotes.length === 0) throw new Error("No notes found.");
+                    if (rawNotes.length === 0) throw new Error("No playable piano notes found in this MIDI file.");
 
                     // 2. Sort all notes chronologically
                     rawNotes.sort((a, b) => a.start - b.start);
 
                     // 3. INTELLIGENT POLYPHONY FILTER: Prevent server overload
-                    // If multiple notes strike at the exact same fraction of time, 
-                    // cap the maximum vertical note width to keep the melody but shred the lag.
                     let filteredNotes = [];
                     let timeMap = {};
-                    const MAX_NOTES_PER_TICK = 6; // Max notes allowed to play at the absolute exact same microsecond
+                    const MAX_NOTES_PER_TICK = 6; 
 
                     rawNotes.forEach(note => {
                         if (!timeMap[note.start]) {
@@ -94,7 +103,6 @@
                     });
 
                     // 4. MAXIMUM SAFE CLIP SAFEGUARD
-                    // Hard cutoff cap at Google's absolute storage ceiling (4,500 notes)
                     const SERVER_LIMIT = 4500;
                     let wasTrimmed = false;
                     if (filteredNotes.length > SERVER_LIMIT) {
@@ -102,7 +110,7 @@
                         wasTrimmed = true;
                     }
 
-                    const finalElapsed = filteredNotes[filteredNotes.length - 1][4];
+                    const finalElapsed = filteredNotes[filteredNotes.length - 1][3]; // Use start time of the last note
 
                     // Google JSON Schema
                     const googlePayload = {
@@ -116,7 +124,7 @@
 
                     // Proxy to bypass CORS block on mobile browsers
                     const proxyUrl = "https://herokuapp.com";
-                    const googleDatabaseApi = "https://musiclab.chromeexperiments.com/Shared-Piano/saved/";
+                    const googleDatabaseApi = "https://chromeexperiments.com";
 
                     const response = await fetch(proxyUrl + googleDatabaseApi, {
                         method: 'POST',
@@ -133,7 +141,7 @@
 
                     const resultData = await response.json();
                     const sharedPianoHashId = resultData.id; 
-                    const finalGoogleUrl = `https://chromeexperiments.com{sharedPianoHashId}`;
+                    const finalGoogleUrl = `https://chromeexperiments.com#${sharedPianoHashId}`;
 
                     let noticeText = wasTrimmed ? "<br><small style='color:#faa61a;'>Note: File compression compressed the timeline to protect server limits.</small>" : "";
 
@@ -156,4 +164,3 @@
     </script>
 </body>
 </html>
-
